@@ -11,7 +11,6 @@ Visual Cookiecutter package also provides enhanced features over the regular
 
 ## What "Visual Cookiecutter" is?
 
-
 Visual Cookiecutter is a small Pythonj package which lets the developers to 
 instanciate (or bake) `cookiecutter` templates in a snap! With its sleek and 
 modern interface built on top of `streamlit`, Visual Cookiecutter provides a fresh 
