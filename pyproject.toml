@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "visual-cookicutter"
+description = 'Bake cookiecutter templates visually (with a web UI)'
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "Guillem96", email = "guillem.orellana@gmail.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+  "cookiecutter",
+  "typer",
+  "streamlit",
+  "pydantic"
+]
+dynamic = ["version"]
+
+[project.scripts]
+viz-cookiecutter = "viz_cookiecutter.__main__:app"
+
+[project.urls]
+Documentation = "https://github.com/Guillem96/visual-cookiecutter#readme"
+Issues = "https://github.com/Guillem96/visual-cookiecutter/issues"
+Source = "https://github.com/Guillem96/visual-cookiecutter"
+
+[tool.hatch.version]
+path = "viz_cookiecutter/__version__.py"
+
+[tool.hatch.envs.default]
+python = "3.11"
+dependencies = [
+  "yapf",
+  "isort",
+  "mypy",
+  "pre-commit",
+]
+
+[tool.hatch.envs.test]
+python = "3.11"
