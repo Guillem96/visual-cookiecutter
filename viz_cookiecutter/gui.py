@@ -1,11 +1,12 @@
 import copy
 import sys
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 import re
 import streamlit as st
 from cookiecutter.main import cookiecutter, get_user_config, determine_repo_dir
 from jinja2 import Environment, BaseLoader
+import typer
 
 from viz_cookiecutter.core import VisualCookiecutter
 
@@ -17,9 +18,17 @@ def _render_string(text: str) -> str:
         {"cookiecutter": st.session_state.to_dict()})
 
 
-def main() -> None:
-    template = sys.argv[1]
-
+def main(
+    template: str,
+    directory: Optional[str] = typer.Option(None),
+    ouptut_dir: Optional[Path] = typer.Option(None, "--output-dir", "-o"),
+    checkout: Optional[str] = typer.Option(None, "--checkout", "-c"),
+    overwrite_if_exists: bool = typer.Option(False, "-f",
+                                             "--overwrite-if-exists"),
+    config_file: Optional[Path] = typer.Option(None,
+                                               dir_okay=False,
+                                               exists=True),
+) -> None:
     viz_cookie, title = _initialize_context(template)
     default_values = _initialize_default_values(viz_cookie)
 
@@ -30,7 +39,10 @@ def main() -> None:
             st.session_state[key] = "" if viz_cookie.is_required(
                 key) else value
 
-    _render_site(viz_cookie, template, title)
+    if _render_site(viz_cookie, title):
+        with st.spinner("Baking project template..."):
+            _bake_cookiecutter_template(viz_cookie, template, directory,
+                                        overwrite_if_exists, ouptut_dir)
 
 
 def _render_site(viz_cookie: VisualCookiecutter, template: str,
@@ -50,9 +62,7 @@ def _render_site(viz_cookie: VisualCookiecutter, template: str,
         })
 
     with st.container():
-        if st.button("Bake 🍪"):
-            with st.spinner("Baking project template..."):
-                _bake_cookiecutter_template(viz_cookie, template)
+        return st.button("Bake 🍪")
 
 
 def _cookiecutter_params_form(viz_cookie: VisualCookiecutter) -> None:
@@ -101,8 +111,10 @@ def _render_text_input(viz_cookie: VisualCookiecutter, label: str,
                          disabled=disabled)
 
 
-def _bake_cookiecutter_template(viz_cookie: VisualCookiecutter,
-                                template: str) -> None:
+def _bake_cookiecutter_template(viz_cookie: VisualCookiecutter, template: str,
+                                directory: Optional[Path],
+                                overwrite_if_exists: bool,
+                                ouptut_dir: Optional[Path]) -> None:
     valid_form = True
     for param_name in viz_cookie.context.is_required:
         if st.session_state[param_name] == "":
@@ -115,7 +127,10 @@ def _bake_cookiecutter_template(viz_cookie: VisualCookiecutter,
     try:
         cookiecutter(template=template,
                      no_input=True,
-                     extra_context=st.session_state.to_dict())
+                     extra_context=st.session_state.to_dict(),
+                     overwrite_if_exists=overwrite_if_exists,
+                     directory=str(directory) if directory else None,
+                     output_dir=str(ouptut_dir) if ouptut_dir else None)
         st.success("Project successfully baked!", icon="✅")
     except Exception as e:
         st.error(f"Error baking project: {e}")
@@ -171,4 +186,4 @@ def _snake_case_to_title(text: str) -> str:
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)
