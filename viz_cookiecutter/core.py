@@ -51,8 +51,15 @@ class VisualCookiecutterContext(pydantic.BaseModel):
         frozen: bool = True
 
 
+_CookiecutterLastLevel = Mapping[str, str | Sequence[str]]
+_CookiecutterNestedDict = Mapping[str, str | Sequence[str]
+                                  | _CookiecutterLastLevel]
+CookiecutterContext = Mapping[str,
+                              str | Sequence[str] | _CookiecutterNestedDict]
+
+
 class VisualCookiecutter(pydantic.BaseModel):
-    cookiecutter_params: Mapping[str, str | Sequence[str]]
+    cookiecutter_params: CookiecutterContext
     context: VisualCookiecutterContext
 
     def is_required(self, param_name: str) -> bool:
@@ -61,6 +68,7 @@ class VisualCookiecutter(pydantic.BaseModel):
     @classmethod
     def from_cookiecutter(cls, fp: TextIO) -> "VisualCookiecutter":
         cookicutter_info = json.load(fp)
+
         try:
             ctx = VisualCookiecutterContext.parse_obj(
                 cookicutter_info.pop("_viz_context"))
@@ -72,6 +80,8 @@ class VisualCookiecutter(pydantic.BaseModel):
     @pydantic.root_validator(allow_reuse=True)
     def _validate_consistency(cls, values) -> None:
         cookiecutter_params = values["cookiecutter_params"]
+        _validate_cookiecutter_params(cookiecutter_params)
+
         cookiecutter_param_names = set(cookiecutter_params)
         ctx: VisualCookiecutterContext = values["context"]
 
@@ -86,12 +96,15 @@ class VisualCookiecutter(pydantic.BaseModel):
                     f'choice parameter "{req_param_name}" cannot be in "is_required".'
                 )
 
+        # Check if description keys are avaialble in the cookiecutter json file
         for desc_param in ctx.descriptions:
             if desc_param not in cookiecutter_param_names:
                 raise ValueError(
                     f'invalid parameter "{req_param_name}" in "descriptions". '
                     "it is not present in cookiecutter context.")
 
+        # Check if condition keys and ask for keys are presend in the
+        # cookiecutter json file
         for cond_param, cond in ctx.if_.items():
             if cond_param not in cookiecutter_param_names:
                 raise ValueError(f'invalid "if" clause: "{cond_param}".'
@@ -110,3 +123,21 @@ class VisualCookiecutter(pydantic.BaseModel):
 
     class Config:
         allow_mutation: bool = False
+
+
+def _validate_cookiecutter_params(params: CookiecutterContext) -> None:
+    for param_key, param_def_value in params.items():
+        if isinstance(param_def_value, dict):
+            err = (
+                f'Mapping "{param_key}" can only have a single item defining '
+                'the schema is supported.')
+            assert len(param_def_value) == 1, err
+
+            err = f'Mappings "{param_key}" can only have 1 or 2 depth levels'
+            assert _dict_depth(param_def_value) in {1, 2}, err
+
+
+def _dict_depth(d: Mapping[Any, Any], level: int = 0) -> int:
+    if not isinstance(d, dict) or not d:
+        return level
+    return max(_dict_depth(d[key], level + 1) for key in d)
