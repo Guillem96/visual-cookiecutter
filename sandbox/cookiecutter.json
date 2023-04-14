@@ -1,0 +1,27 @@
+{
+    "folder_name": "folder",
+    "sub_folder": "{{ cookiecutter.name.upper() }}",
+    "create_file": [
+        "yes",
+        "no"
+    ],
+    "file_name": "file",
+    "name": "guillem",
+    "_viz_context": {
+        "is_required": [
+            "folder_name"
+        ],
+        "descriptions": {
+            "create_file": "Whether or not create a file containing the user name provided in the `name` parameter"
+        },
+        "if": {
+            "create_file": {
+                "is": "yes",
+                "ask_for": [
+                    "file_name",
+                    "name"
+                ]
+            }
+        }
+    }
+}
