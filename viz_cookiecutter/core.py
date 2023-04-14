@@ -64,12 +64,12 @@ class VisualCookiecutter(pydantic.BaseModel):
         try:
             ctx = VisualCookiecutterContext.parse_obj(
                 cookicutter_info.pop("_viz_context"))
-        except KeyError:
+        except (KeyError, TypeError):
             ctx = VisualCookiecutterContext.parse_obj({})
 
         return cls(cookiecutter_params=cookicutter_info, context=ctx)
 
-    @pydantic.root_validator(allow_reuse=True)
+    @pydantic.root_validator(allow_reuse=True, skip_on_failure=True)
     def _validate_consistency(cls, values) -> None:
         cookiecutter_params = values["cookiecutter_params"]
         cookiecutter_param_names = set(cookiecutter_params)
@@ -104,9 +104,6 @@ class VisualCookiecutter(pydantic.BaseModel):
                         "it is not present in cookiecutter context.")
 
         return values
-
-    def __hash__(self) -> int:
-        return hash(self.context) ^ hash(tuple(self.cookiecutter_params))
 
     class Config:
         allow_mutation: bool = False

@@ -1,8 +1,8 @@
 import copy
-import sys
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Mapping, Optional
 import re
+import pydantic
 import streamlit as st
 from cookiecutter.main import cookiecutter, get_user_config, determine_repo_dir
 from jinja2 import Environment, BaseLoader
@@ -10,43 +10,45 @@ import typer
 
 from viz_cookiecutter.core import VisualCookiecutter
 
-jinja_env = Environment(loader=BaseLoader())
-
-
-def _render_string(text: str) -> str:
-    return jinja_env.from_string(text).render(
-        {"cookiecutter": st.session_state.to_dict()})
+_JINJA_ENV = Environment(loader=BaseLoader())
 
 
 def main(
     template: str,
-    directory: Optional[str] = typer.Option(None),
-    ouptut_dir: Optional[Path] = typer.Option(None, "--output-dir", "-o"),
-    checkout: Optional[str] = typer.Option(None, "--checkout", "-c"),
-    overwrite_if_exists: bool = typer.Option(False, "-f",
-                                             "--overwrite-if-exists"),
+    directory: Optional[str] = None,
+    output_dir: Path = Path.cwd(),
+    checkout: Optional[str] = None,
+    overwrite_if_exists: bool = False,
     config_file: Optional[Path] = typer.Option(None,
                                                dir_okay=False,
                                                exists=True),
 ) -> None:
-    viz_cookie, title = _initialize_context(template)
-    default_values = _initialize_default_values(viz_cookie)
+    try:
+        viz_cookie, title = _initialize_context(template,
+                                                config_file=config_file,
+                                                checkout=checkout)
+    except pydantic.ValidationError as e:
+        _display_validation_err(e)
+    except Exception as e:
+        import traceback
+        traceback.print_exception(e)
+        st.error(f"Error initializing cookiecutter context: {e}", icon="🚨")
+    else:
+        default_values = _initialize_default_values(viz_cookie)
+        # Set default values to the session_state, if the parameter
+        # is required set an empty value as default
+        for key, value in default_values.items():
+            if key not in st.session_state:
+                st.session_state[key] = "" if viz_cookie.is_required(
+                    key) else value
 
-    # Set default values to the session_state, if the parameter
-    # is required set an empty value as default
-    for key, value in default_values.items():
-        if key not in st.session_state:
-            st.session_state[key] = "" if viz_cookie.is_required(
-                key) else value
-
-    if _render_site(viz_cookie, title):
-        with st.spinner("Baking project template..."):
-            _bake_cookiecutter_template(viz_cookie, template, directory,
-                                        overwrite_if_exists, ouptut_dir)
+        if _render_site(viz_cookie, title):
+            with st.spinner("Baking project template..."):
+                _bake_cookiecutter_template(viz_cookie, template, directory,
+                                            overwrite_if_exists, output_dir)
 
 
-def _render_site(viz_cookie: VisualCookiecutter, template: str,
-                 title: str) -> None:
+def _render_site(viz_cookie: VisualCookiecutter, title: str) -> None:
     st.markdown(f"# 🍪 Visual Cookicutter - `{title}`")
 
     col1, col2 = st.columns([2, 1])
@@ -97,7 +99,7 @@ def _render_text_input(viz_cookie: VisualCookiecutter, label: str,
 
     # If the default value is a Jinja expression, render it and do not allow
     # the user to override it
-    if re.match(r"^.*\{\{\s+.*\s+\}\}.*$", param_def_value):
+    if _contains_jinja_template(param_def_value):
         value = _render_string(param_def_value)
         disabled = True
         label = f"{label} - 🚫 Generated with Jinja: `{param_def_value}`"
@@ -114,7 +116,7 @@ def _render_text_input(viz_cookie: VisualCookiecutter, label: str,
 def _bake_cookiecutter_template(viz_cookie: VisualCookiecutter, template: str,
                                 directory: Optional[Path],
                                 overwrite_if_exists: bool,
-                                ouptut_dir: Optional[Path]) -> None:
+                                output_dir: Path) -> None:
     valid_form = True
     for param_name in viz_cookie.context.is_required:
         if st.session_state[param_name] == "":
@@ -129,11 +131,13 @@ def _bake_cookiecutter_template(viz_cookie: VisualCookiecutter, template: str,
                      no_input=True,
                      extra_context=st.session_state.to_dict(),
                      overwrite_if_exists=overwrite_if_exists,
-                     directory=str(directory) if directory else None,
-                     output_dir=str(ouptut_dir) if ouptut_dir else None)
+                     directory=_none_or_str_path(directory),
+                     output_dir=output_dir)
         st.success("Project successfully baked!", icon="✅")
     except Exception as e:
-        st.error(f"Error baking project: {e}")
+        import traceback
+        traceback.print_exception(e)
+        st.error(f"Error baking project: {e}", icon="🚨")
 
 
 def _should_ask_for(viz_cookie: VisualCookiecutter, pn: str) -> bool:
@@ -152,11 +156,16 @@ def _should_ask_for(viz_cookie: VisualCookiecutter, pn: str) -> bool:
 
 
 @st.cache_resource(show_spinner="Preparing Cookiecutter template...")
-def _initialize_context(template: str) -> tuple[VisualCookiecutter, str]:
-    config_dict = get_user_config()
+def _initialize_context(
+    template: str,
+    config_file: Optional[Path],
+    checkout: Optional[str],
+) -> tuple[VisualCookiecutter, str]:
+    config_dict = get_user_config(config_file=_none_or_str_path(config_file))
+
     template_path, _ = determine_repo_dir(
         template=template,
-        checkout=None,
+        checkout=checkout,
         abbreviations=config_dict["abbreviations"],
         clone_to_dir=config_dict["cookiecutters_dir"],
         no_input=True,
@@ -181,8 +190,32 @@ def _initialize_default_values(
     return copy.deepcopy(input_values)
 
 
+def _display_validation_err(validation_err: pydantic.ValidationError) -> None:
+    fmt_errs = []
+    for err in validation_err.errors():
+        key = ".".join(err["loc"][1:])
+        fmt_errs.append(f'- property "{key}" is not valid: {err["msg"]}')
+
+    # Extra whitespaces for generating new lines in st.error
+    err_msg = "  \n".join(fmt_errs)
+    st.error(f"Error validating cookiecutter context:\n  {err_msg}", icon="🚨")
+
+
 def _snake_case_to_title(text: str) -> str:
     return " ".join(t.title() for t in text.split("_"))
+
+
+def _none_or_str_path(path: Optional[Path]) -> Optional[str]:
+    return str(path) if path is not None else None
+
+
+def _contains_jinja_template(text: str) -> bool:
+    return bool(re.match(r"^.*\{\{\s+.*\s+\}\}.*$", text))
+
+
+def _render_string(text: str) -> str:
+    return _JINJA_ENV.from_string(text).render(
+        {"cookiecutter": st.session_state.to_dict()})
 
 
 if __name__ == "__main__":

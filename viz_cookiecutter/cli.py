@@ -22,8 +22,8 @@ def run(
         help=
         "Directory within repo that holds cookiecutter.json file for advanced "
         "repositories with multi templates in it"),
-    ouptut_dir: Optional[Path] = typer.Option(
-        None,
+    output_dir: Path = typer.Option(
+        Path.cwd(),
         "--output-dir",
         "-o",
         help="Where to output the generated project dir into"),
@@ -49,6 +49,8 @@ def run(
 
     if directory:
         args.extend(["--directory", directory])
+
+    args.extend(["--output-dir", str(output_dir.absolute())])
 
     if checkout is not None:
         args.extend(["--checkout", checkout])
