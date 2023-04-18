@@ -56,7 +56,7 @@ def run(
         args.extend(["--checkout", checkout])
 
     if config_file is not None:
-        args.extend(["--config-file", config_file])
+        args.extend(["--config-file", str(config_file.absolute())])
 
     with _get_streamlit_main() as st_main:
         st_bootstrap.run(str(st_main),

@@ -49,3 +49,6 @@ dependencies = [
 
 [tool.hatch.envs.test]
 python = "3.11"
+
+[tool.mypy]
+ignore_missing_imports = true

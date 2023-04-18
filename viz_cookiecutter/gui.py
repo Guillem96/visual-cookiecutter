@@ -1,12 +1,13 @@
 import copy
+import re
 from pathlib import Path
 from typing import Mapping, Optional
-import re
+
 import pydantic
 import streamlit as st
-from cookiecutter.main import cookiecutter, get_user_config, determine_repo_dir
-from jinja2 import Environment, BaseLoader
 import typer
+from cookiecutter.main import cookiecutter, determine_repo_dir, get_user_config
+from jinja2 import BaseLoader, Environment
 
 from viz_cookiecutter.core import VisualCookiecutter
 
@@ -48,7 +49,7 @@ def main(
                                             overwrite_if_exists, output_dir)
 
 
-def _render_site(viz_cookie: VisualCookiecutter, title: str) -> None:
+def _render_site(viz_cookie: VisualCookiecutter, title: str) -> bool:
     st.markdown(f"# 🍪 Visual Cookicutter - `{title}`")
 
     col1, col2 = st.columns([2, 1])
@@ -114,7 +115,7 @@ def _render_text_input(viz_cookie: VisualCookiecutter, label: str,
 
 
 def _bake_cookiecutter_template(viz_cookie: VisualCookiecutter, template: str,
-                                directory: Optional[Path],
+                                directory: Optional[str],
                                 overwrite_if_exists: bool,
                                 output_dir: Path) -> None:
     valid_form = True
@@ -131,7 +132,7 @@ def _bake_cookiecutter_template(viz_cookie: VisualCookiecutter, template: str,
                      no_input=True,
                      extra_context=st.session_state.to_dict(),
                      overwrite_if_exists=overwrite_if_exists,
-                     directory=_none_or_str_path(directory),
+                     directory=directory,
                      output_dir=output_dir)
         st.success("Project successfully baked!", icon="✅")
     except Exception as e:
@@ -193,7 +194,7 @@ def _initialize_default_values(
 def _display_validation_err(validation_err: pydantic.ValidationError) -> None:
     fmt_errs = []
     for err in validation_err.errors():
-        key = ".".join(err["loc"][1:])
+        key = ".".join(map(str, err["loc"][1:]))
         fmt_errs.append(f'- property "{key}" is not valid: {err["msg"]}')
 
     # Extra whitespaces for generating new lines in st.error
