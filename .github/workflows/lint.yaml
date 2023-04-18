@@ -1,0 +1,27 @@
+name: Check Python Formatting
+
+on: [push]
+jobs:
+  yapf:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Ensure latest pip
+        run: python -m pip install --upgrade pip
+      - name: Install dependencies
+        run: |
+          pip install hatch
+          hatch run true
+      - name: Check yapf Formatting
+        run: hatch run yapf -r -d viz_cookiecutter
+      - name: Check isort Formatting
+        run: hatch run isort --check-only viz_cookiecutter
+      - name: Check mypy Formatting
+        run: hatch run mypy --install-types --non-interactive viz_cookiecutter
